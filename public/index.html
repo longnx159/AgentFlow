@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Agent Flow · Manager</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div id="login" class="login">
+      <form id="login-form" class="login-card">
+        <div class="mark">af<span>↗</span></div>
+        <p class="eyebrow">WORKFLOW OPERATIONS</p>
+        <h1>Không gian điều phối<br />của bạn.</h1>
+        <p>Kết nối Worker, thiết kế luồng và theo dõi từng bước thực thi.</p>
+        <label for="token">Admin token</label
+        ><input
+          id="token"
+          type="password"
+          autocomplete="current-password"
+          required
+          placeholder="Nhập token của Manager"
+        /><button class="primary" type="submit">Mở Manager <span>→</span></button
+        ><small>Phiên đăng nhập dùng cookie httpOnly.</small>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </div>
+    <div id="shell" hidden>
+      <aside>
+        <a class="brand" href="/">af<span>Agent Flow</span></a>
+        <div class="workspace-label">WORKSPACE <span>LOCAL</span></div>
+        <nav aria-label="Điều hướng">
+          <button data-view="overview" class="active">◫ <span>Tổng quan</span></button
+          ><button data-view="workflows">
+            ⤳ <span>Workflows</span><b id="nav-flow-count">0</b></button
+          ><button data-view="runs">◷ <span>Lịch sử chạy</span></button
+          ><button data-view="workers">▣ <span>Workers</span></button
+          ><button data-view="settings">⚙ <span>Cấu hình</span></button>
+        </nav>
+        <a href="/flows/" target="_blank" class="editor-link">Mở trình thiết kế <span>↗</span></a>
+        <div class="aside-footer">
+          <span class="dot"></span> Manager đang kết nối<small id="last-sync">Đang đồng bộ…</small>
+        </div>
+      </aside>
+      <main>
+        <header>
+          <div class="breadcrumb">
+            Workspace <span>/</span> <strong id="page-label">Tổng quan</strong>
+          </div>
+          <div class="header-right">
+            <span class="live"><i class="dot"></i> Hệ thống cục bộ</span
+            ><button id="refresh" class="icon-button" title="Làm mới">↻</button
+            ><span class="avatar">AD</span>
+          </div>
+        </header>
+        <div class="content">
+          <div id="notice" role="status" hidden></div>
+          <section id="overview" class="view">
+            <div class="title-row">
+              <div>
+                <p class="eyebrow">CONTROL CENTER</p>
+                <h1>Mọi luồng, trong tầm kiểm soát.</h1>
+                <p class="subtitle">Một nơi để thiết kế, điều phối và quan sát công việc.</p>
+              </div>
+              <button class="primary" id="new-example">＋ Tạo workflow mẫu</button>
+            </div>
+            <div class="stats" id="stats"></div>
+            <div class="grid-overview">
+              <article class="panel">
+                <div class="panel-title">
+                  <h2>Hoạt động gần đây</h2>
+                  <button data-go="runs" class="text-button">Xem tất cả →</button>
+                </div>
+                <div id="recent-runs"></div>
+              </article>
+              <article class="panel guide">
+                <p class="eyebrow">THIẾT KẾ → PUBLISH → CHẠY</p>
+                <h2>Từ ý tưởng đến<br />luồng tự động.</h2>
+                <p>
+                  Kéo thả các node trong Node-RED. Deploy lưu bản nháp; Publish tạo phiên bản dùng
+                  để thực thi.
+                </p>
+                <ol>
+                  <li><span>01</span> Thiết kế nháp</li>
+                  <li><span>02</span> Publish phiên bản</li>
+                  <li><span>03</span> Chạy và theo dõi trace</li>
+                </ol>
+                <a href="/flows/" target="_blank" class="secondary">Mở trình thiết kế ↗</a>
+              </article>
+            </div>
+            <article class="panel">
+              <div class="panel-title">
+                <h2>Worker đã kết nối</h2>
+                <button data-go="workers" class="text-button">Quản lý Workers →</button>
+              </div>
+              <div id="overview-workers"></div>
+            </article>
+          </section>
+          <section id="workflows" class="view" hidden>
+            <div class="title-row">
+              <div>
+                <p class="eyebrow">DESIGN & PUBLISH</p>
+                <h1>Workflows</h1>
+                <p class="subtitle">Bản nháp được lưu riêng với phiên bản đang hoạt động.</p>
+              </div>
+              <div class="actions">
+                <button id="import-workflow">Nhập JSON</button
+                ><a href="/flows/" target="_blank" class="primary">Mở Node-RED ↗</a>
+              </div>
+            </div>
+            <article class="panel">
+              <div class="panel-title">
+                <h2>Bản nháp Node-RED</h2>
+                <span class="muted">Deploy trước khi Publish</span>
+              </div>
+              <div id="draft-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-title"><h2>Phiên bản đã Publish</h2></div>
+              <div id="workflow-list"></div>
+            </article>
+          </section>
+          <section id="runs" class="view" hidden>
+            <div class="title-row">
+              <div>
+                <p class="eyebrow">EXECUTION HISTORY</p>
+                <h1>Lịch sử chạy</h1>
+                <p class="subtitle">Trạng thái bền vững, trace từng node và kết quả nguyên bản.</p>
+              </div>
+            </div>
+            <article class="panel"><div id="run-list"></div></article>
+            <article class="panel" id="run-detail" hidden></article>
+          </section>
+          <section id="workers" class="view" hidden>
+            <div class="title-row">
+              <div>
+                <p class="eyebrow">EXECUTION FLEET</p>
+                <h1>Workers</h1>
+                <p class="subtitle">Mỗi Worker xử lý tối đa một lần thực thi tại một thời điểm.</p>
+              </div>
+            </div>
+            <article class="panel"><div id="worker-list"></div></article>
+            <article class="panel">
+              <div class="panel-title"><h2>Kết nối Worker</h2></div>
+              <p class="muted">
+                Khởi động Worker với URL Manager và pairing token. Worker tự nhận cấu hình và gửi
+                heartbeat.
+              </p>
+              <p>
+                Không tự chạy lại tác vụ có kết quả chưa xác định. Đối chiếu phiên hội thoại trước
+                khi xử lý thủ công.
+              </p>
+            </article>
+          </section>
+          <section id="settings" class="view" hidden>
+            <div class="title-row">
+              <div>
+                <p class="eyebrow">SYSTEM PREFERENCES</p>
+                <h1>Cấu hình hệ thống</h1>
+                <p class="subtitle">
+                  Áp dụng trực tiếp vào cấu hình Manager. Thời gian tính bằng giây.
+                </p>
+              </div>
+              <div class="actions">
+                <button id="import-settings">Nhập JSON</button
+                ><button id="export-settings">Xuất JSON ↓</button
+                ><button class="primary" id="save-settings">Lưu thay đổi</button>
+              </div>
+            </div>
+            <div id="settings-form"></div>
+            <article class="panel">
+              <div class="panel-title">
+                <h2>Ghi đè theo Worker</h2>
+                <span class="muted">JSON: workerId → connection overrides</span>
+              </div>
+              <textarea id="worker-overrides" rows="7" spellcheck="false"></textarea>
+              <p class="muted">
+                Kết nối: toàn cục → Worker. Thực thi: toàn cục → workflow → node. null nghĩa là
+                không giới hạn.
+              </p>
+            </article>
+          </section>
+          <footer>Agent Flow <span>Manager / Worker · SQLite · Passive Node-RED</span></footer>
+        </div>
+      </main>
+    </div>
+    <dialog id="json-dialog">
+      <form method="dialog" id="json-form">
+        <div class="panel-title">
+          <h2 id="dialog-title">JSON</h2>
+          <button value="cancel" class="icon-button" aria-label="Đóng">×</button>
+        </div>
+        <p id="dialog-hint" class="muted"></p>
+        <textarea id="dialog-json" rows="15" spellcheck="false"></textarea>
+        <div class="dialog-actions">
+          <button value="cancel">Hủy</button
+          ><button class="primary" id="dialog-confirm" value="ok">Xác nhận</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="resolve-dialog">
+      <form id="resolve-form">
+        <div class="panel-title">
+          <h2>Đối chiếu lần thực thi</h2>
+          <button id="resolve-cancel" type="button" class="icon-button" aria-label="Đóng">×</button>
+        </div>
+        <p class="muted">
+          Kiểm tra trực tiếp hội thoại và trạng thái Worker trước khi quyết định. Chỉ chọn “chưa
+          gửi” khi bạn đã xác nhận không có lần gửi nào xảy ra.
+        </p>
+        <p id="resolve-attempt" class="id"></p>
+        <fieldset class="resolution-options">
+          <legend>Kết quả kiểm tra của bạn</legend>
+          <label
+            ><input type="radio" name="resolution" value="notSent" required /><span
+              ><strong>Đã kiểm tra: chưa gửi</strong
+              ><small
+                >Đóng attempt này và đưa tác vụ chưa gửi về hàng chờ để tạo attempt mới.</small
+              ></span
+            ></label
+          ><label
+            ><input type="radio" name="resolution" value="abandon" required /><span
+              ><strong>Hủy attempt sau khi kiểm tra</strong
+              ><small
+                >Hủy attempt và dừng lượt chạy hiện tại. Giữ ghi chú kiểm tra trong nhật ký.</small
+              ></span
+            ></label
+          >
+        </fieldset>
+        <label for="resolve-note">Ghi chú kiểm tra bắt buộc</label
+        ><textarea
+          id="resolve-note"
+          rows="4"
+          required
+          placeholder="Bạn đã kiểm tra hội thoại nào, thấy trạng thái gì và vì sao chọn hành động này?"
+        ></textarea>
+        <p id="resolve-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" id="resolve-back">Quay lại</button
+          ><button type="submit" class="primary">Xác nhận xử lý</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

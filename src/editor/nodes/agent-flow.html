@@ -1,0 +1,434 @@
+<script type="text/javascript">
+  (function () {
+    const definitions = {
+      start: {
+        color: '#8dc8b1',
+        icon: 'font-awesome/fa-play',
+        inputs: 0,
+        fields: { triggers: '[{"id":"manual","type":"manual"}]', execution: '{}', limits: '{}' },
+      },
+      task: {
+        color: '#a9c6e6',
+        icon: 'font-awesome/fa-pencil',
+        fields: { skill: '', role: 'writer', input: '{{input}}', timeout: '{}' },
+      },
+      review: {
+        color: '#c5b6e3',
+        icon: 'font-awesome/fa-check-square-o',
+        fields: { skill: '', rubric: '', role: 'reviewer', input: '{{lastOutput}}', timeout: '{}' },
+      },
+      condition: {
+        color: '#ead3a2',
+        icon: 'font-awesome/fa-code-fork',
+        fields: { cases: '[{"==":[{"var":"input.approved"},true]}]', timeout: '{}' },
+      },
+      repeat: {
+        color: '#e5b89f',
+        icon: 'font-awesome/fa-repeat',
+        fields: { target: '', maxIterations: 3, delaySec: 0, timeout: '{}' },
+      },
+      delay: {
+        color: '#b9cbd0',
+        icon: 'font-awesome/fa-clock-o',
+        fields: { delaySec: 60, until: '', timeout: '{}' },
+      },
+      end: {
+        color: '#a6c9b0',
+        icon: 'font-awesome/fa-stop',
+        outputs: 0,
+        fields: { outcome: 'succeeded', outputNodeId: '' },
+      },
+    };
+    Object.keys(definitions).forEach((kind) => {
+      const d = definitions[kind],
+        defaults = { name: { value: '' } };
+      Object.keys(d.fields).forEach((key) => (defaults[key] = { value: d.fields[key] }));
+      if (kind === 'condition') defaults.outputs = { value: 2 };
+      RED.nodes.registerType('af-' + kind, {
+        category: 'Agent Flow',
+        color: d.color,
+        defaults,
+        inputs: d.inputs === 0 ? 0 : 1,
+        outputs: d.outputs === 0 ? 0 : kind === 'condition' ? 2 : 1,
+        icon: d.icon,
+        label: function () {
+          return this.name || 'AF ' + kind;
+        },
+        outputLabels: function (i) {
+          return kind === 'condition'
+            ? i < this.outputs - 1
+              ? 'Case ' + (i + 1)
+              : 'Otherwise'
+            : 'Next';
+        },
+        oneditprepare: function () {
+          if (kind === 'condition') {
+            $('#node-input-cases')
+              .on('input', function () {
+                try {
+                  $('#af-case-status').text(JSON.parse(this.value).length + ' cases + Otherwise');
+                } catch {
+                  $('#af-case-status').text('JSON không hợp lệ');
+                }
+              })
+              .trigger('input');
+            const box = $(
+              '<div class="form-row" style="padding:12px;background:#f3f6ef;border-radius:7px"><b>Tạo rule cho case 1</b><p>Chọn AND / OR, thêm điều kiện, rồi áp dụng. Các case khác được giữ nguyên.</p><select class="af-join" style="width:100%"><option value="and">AND · tất cả điều kiện</option><option value="or">OR · ít nhất một điều kiện</option></select><div class="af-rows"></div><button type="button" class="red-ui-button af-add">＋ Điều kiện</button> <button type="button" class="red-ui-button af-apply">Áp dụng vào case 1</button><p class="af-rule-error" style="color:#b55d42"></p><small>Giá trị true/false/số được giữ đúng kiểu. Văn bản không cần dấu ngoặc kép. Bạn vẫn có thể sửa JSON nâng cao bên dưới.</small></div>',
+            );
+            $('#node-input-cases').closest('.form-row').before(box);
+            function addRule(initial) {
+              const row = $(
+                '<div class="af-rule-row" style="display:flex;gap:5px;margin:10px 0"><input class="af-field" style="width:38%" placeholder="review.score"><select class="af-operator" style="width:22%"></select><input class="af-value" style="width:30%" placeholder="80 / true / văn bản"><button type="button" class="red-ui-button af-remove" title="Xóa điều kiện">×</button></div>',
+              );
+              ['==', '!=', '>', '>=', '<', '<=', 'contains', 'exists'].forEach((op) =>
+                row.find('.af-operator').append($('<option>').val(op).text(op)),
+              );
+              row.find('.af-field').val(initial?.field || '');
+              row.find('.af-operator').val(initial?.operator || '==');
+              row.find('.af-value').val(initial?.value ?? '');
+              row.find('.af-remove').on('click', () => row.remove());
+              box.find('.af-rows').append(row);
+            }
+            let restored = false;
+            try {
+              const current = JSON.parse($('#node-input-cases').val())[0],
+                logic = current?.when || current;
+              const op = logic && Object.keys(logic)[0];
+              if (['and', 'or'].includes(op) && Array.isArray(logic[op])) {
+                const rows = logic[op].map((clause) => {
+                  const operator = Object.keys(clause)[0],
+                    arg = clause[operator];
+                  if (operator === 'exists') return { field: arg, operator, value: '' };
+                  if (!Array.isArray(arg) || typeof arg[0]?.var !== 'string')
+                    throw Error('advanced');
+                  return { field: arg[0].var, operator, value: JSON.stringify(arg[1]) };
+                });
+                box.find('.af-join').val(op);
+                rows.forEach(addRule);
+                restored = rows.length > 0;
+              }
+            } catch {}
+            if (!restored) addRule({ field: 'review.passed', operator: '==', value: 'true' });
+            box.find('.af-add').on('click', () => addRule());
+            box.find('.af-apply').on('click', async () => {
+              try {
+                const { buildRule } = await import('/rules.js');
+                const rows = [];
+                box.find('.af-rule-row').each(function () {
+                  rows.push({
+                    field: $(this).find('.af-field').val(),
+                    operator: $(this).find('.af-operator').val(),
+                    value: $(this).find('.af-value').val(),
+                  });
+                });
+                const rule = buildRule(rows, box.find('.af-join').val());
+                const cases = JSON.parse($('#node-input-cases').val() || '[]');
+                if (!Array.isArray(cases)) throw Error('Cases phải là mảng JSON');
+                cases[0] = cases[0]?.when ? { ...cases[0], when: rule } : rule;
+                $('#node-input-cases')
+                  .val(JSON.stringify(cases, null, 2))
+                  .trigger('input');
+                box.find('.af-rule-error').text('Đã cập nhật case 1.');
+              } catch (error) {
+                box.find('.af-rule-error').text(error.message);
+              }
+            });
+          }
+        },
+        oneditsave: function () {
+          if (kind === 'condition') {
+            try {
+              this.outputs = JSON.parse($('#node-input-cases').val()).length + 1;
+            } catch {
+              this.outputs = 2;
+            }
+          }
+        },
+      });
+    });
+  })();
+</script>
+<script type="text/html" data-template-name="af-start">
+  <div class="form-row">
+    <label for="node-input-name">Tên</label><input id="node-input-name" placeholder="start" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-triggers">triggers</label
+    ><textarea
+      id="node-input-triggers"
+      rows="5"
+      style="width:100%;font-family:monospace"
+    ></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-execution">execution</label
+    ><textarea
+      id="node-input-execution"
+      rows="5"
+      style="width:100%;font-family:monospace"
+    ></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-limits">limits</label
+    ><textarea id="node-input-limits" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div id="af-case-status"></div>
+  <p style="color:#666">Deploy chỉ lưu bản nháp. Publish trong Manager để kích hoạt phiên bản.</p>
+</script>
+<script type="text/html" data-help-name="af-start">
+  <p>Node thụ động: chỉ Manager thực thi sau Publish.</p>
+  <p>
+    skill: nội dung hướng dẫn; input: template {{input}}, {{lastOutput}}, {{feedback}},
+    {{previousOutput}}, {{steps.NODE.text}}. timeout/execution: JSON cấu hình thời gian. null =
+    không giới hạn.
+  </p>
+  <p>
+    Condition cases: mảng JSON Logic, hỗ trợ and/or và var. Mỗi case tương ứng một cổng; cổng cuối
+    Otherwise. Ví dụ [{"and": [{"==": [{"var": "input.approved"}, true]}, {">": [{"var":
+    "input.score"}, 3]}]}]. Repeat target: id node cần lặp; maxIterations tính cả lượt đầu. delaySec
+    là thời gian chờ giữa các lượt. End outputNodeId chọn id Task hoặc Review để trả kết quả; để
+    trống dùng Task gần nhất.
+  </p>
+  <p>
+    Start triggers: [{"id":"manual","type":"manual"}]. Schedule dùng cron/intervalSec và timezone;
+    event dùng eventType; workflow dùng sourceWorkflowId. Có when JSON Logic, overlap queue/skip,
+    missed skip/catchUpLatest.
+  </p>
+</script>
+<script type="text/html" data-template-name="af-task">
+  <div class="form-row">
+    <label for="node-input-name">Tên</label><input id="node-input-name" placeholder="task" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-skill">skill</label
+    ><textarea id="node-input-skill" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-role">role</label><input id="node-input-role" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-input">input</label
+    ><textarea id="node-input-input" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-timeout">timeout</label
+    ><textarea id="node-input-timeout" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div id="af-case-status"></div>
+  <p style="color:#666">Deploy chỉ lưu bản nháp. Publish trong Manager để kích hoạt phiên bản.</p>
+</script>
+<script type="text/html" data-help-name="af-task">
+  <p>Node thụ động: chỉ Manager thực thi sau Publish.</p>
+  <p>
+    skill: nội dung hướng dẫn; input: template {{input}}, {{lastOutput}}, {{feedback}},
+    {{previousOutput}}, {{steps.NODE.text}}. timeout/execution: JSON cấu hình thời gian. null =
+    không giới hạn.
+  </p>
+  <p>
+    Condition cases: mảng JSON Logic, hỗ trợ and/or và var. Mỗi case tương ứng một cổng; cổng cuối
+    Otherwise. Ví dụ [{"and": [{"==": [{"var": "input.approved"}, true]}, {">": [{"var":
+    "input.score"}, 3]}]}]. Repeat target: id node cần lặp; maxIterations tính cả lượt đầu. delaySec
+    là thời gian chờ giữa các lượt. End outputNodeId chọn id Task hoặc Review để trả kết quả; để
+    trống dùng Task gần nhất.
+  </p>
+  <p>
+    Start triggers: [{"id":"manual","type":"manual"}]. Schedule dùng cron/intervalSec và timezone;
+    event dùng eventType; workflow dùng sourceWorkflowId. Có when JSON Logic, overlap queue/skip,
+    missed skip/catchUpLatest.
+  </p>
+</script>
+<script type="text/html" data-template-name="af-review">
+  <div class="form-row">
+    <label for="node-input-name">Tên</label><input id="node-input-name" placeholder="review" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-skill">skill</label
+    ><textarea id="node-input-skill" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-rubric">rubric</label
+    ><textarea id="node-input-rubric" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-role">role</label><input id="node-input-role" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-input">input</label
+    ><textarea id="node-input-input" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-timeout">timeout</label
+    ><textarea id="node-input-timeout" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div id="af-case-status"></div>
+  <p style="color:#666">Deploy chỉ lưu bản nháp. Publish trong Manager để kích hoạt phiên bản.</p>
+</script>
+<script type="text/html" data-help-name="af-review">
+  <p>Node thụ động: chỉ Manager thực thi sau Publish.</p>
+  <p>
+    skill: nội dung hướng dẫn; input: template {{input}}, {{lastOutput}}, {{feedback}},
+    {{previousOutput}}, {{steps.NODE.text}}. timeout/execution: JSON cấu hình thời gian. null =
+    không giới hạn.
+  </p>
+  <p>
+    Condition cases: mảng JSON Logic, hỗ trợ and/or và var. Mỗi case tương ứng một cổng; cổng cuối
+    Otherwise. Ví dụ [{"and": [{"==": [{"var": "input.approved"}, true]}, {">": [{"var":
+    "input.score"}, 3]}]}]. Repeat target: id node cần lặp; maxIterations tính cả lượt đầu. delaySec
+    là thời gian chờ giữa các lượt. End outputNodeId chọn id Task hoặc Review để trả kết quả; để
+    trống dùng Task gần nhất.
+  </p>
+  <p>
+    Start triggers: [{"id":"manual","type":"manual"}]. Schedule dùng cron/intervalSec và timezone;
+    event dùng eventType; workflow dùng sourceWorkflowId. Có when JSON Logic, overlap queue/skip,
+    missed skip/catchUpLatest.
+  </p>
+</script>
+<script type="text/html" data-template-name="af-condition">
+  <div class="form-row">
+    <label for="node-input-name">Tên</label><input id="node-input-name" placeholder="condition" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-cases">cases</label
+    ><textarea id="node-input-cases" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div class="form-row">
+    <label for="node-input-timeout">timeout</label
+    ><textarea id="node-input-timeout" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div id="af-case-status"></div>
+  <p style="color:#666">Deploy chỉ lưu bản nháp. Publish trong Manager để kích hoạt phiên bản.</p>
+</script>
+<script type="text/html" data-help-name="af-condition">
+  <p>Node thụ động: chỉ Manager thực thi sau Publish.</p>
+  <p>
+    skill: nội dung hướng dẫn; input: template {{input}}, {{lastOutput}}, {{feedback}},
+    {{previousOutput}}, {{steps.NODE.text}}. timeout/execution: JSON cấu hình thời gian. null =
+    không giới hạn.
+  </p>
+  <p>
+    Condition cases: mảng JSON Logic, hỗ trợ and/or và var. Mỗi case tương ứng một cổng; cổng cuối
+    Otherwise. Ví dụ [{"and": [{"==": [{"var": "input.approved"}, true]}, {">": [{"var":
+    "input.score"}, 3]}]}]. Repeat target: id node cần lặp; maxIterations tính cả lượt đầu. delaySec
+    là thời gian chờ giữa các lượt. End outputNodeId chọn id Task hoặc Review để trả kết quả; để
+    trống dùng Task gần nhất.
+  </p>
+  <p>
+    Start triggers: [{"id":"manual","type":"manual"}]. Schedule dùng cron/intervalSec và timezone;
+    event dùng eventType; workflow dùng sourceWorkflowId. Có when JSON Logic, overlap queue/skip,
+    missed skip/catchUpLatest.
+  </p>
+</script>
+<script type="text/html" data-template-name="af-repeat">
+  <div class="form-row">
+    <label for="node-input-name">Tên</label><input id="node-input-name" placeholder="repeat" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-target">target</label><input id="node-input-target" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-maxIterations">maxIterations</label
+    ><input id="node-input-maxIterations" type="number" min="1" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-delaySec">delaySec</label
+    ><input id="node-input-delaySec" type="number" min="0" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-timeout">timeout</label
+    ><textarea id="node-input-timeout" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div id="af-case-status"></div>
+  <p style="color:#666">Deploy chỉ lưu bản nháp. Publish trong Manager để kích hoạt phiên bản.</p>
+</script>
+<script type="text/html" data-help-name="af-repeat">
+  <p>Node thụ động: chỉ Manager thực thi sau Publish.</p>
+  <p>
+    skill: nội dung hướng dẫn; input: template {{input}}, {{lastOutput}}, {{feedback}},
+    {{previousOutput}}, {{steps.NODE.text}}. timeout/execution: JSON cấu hình thời gian. null =
+    không giới hạn.
+  </p>
+  <p>
+    Condition cases: mảng JSON Logic, hỗ trợ and/or và var. Mỗi case tương ứng một cổng; cổng cuối
+    Otherwise. Ví dụ [{"and": [{"==": [{"var": "input.approved"}, true]}, {">": [{"var":
+    "input.score"}, 3]}]}]. Repeat target: id node cần lặp; maxIterations tính cả lượt đầu. delaySec
+    là thời gian chờ giữa các lượt. End outputNodeId chọn id Task hoặc Review để trả kết quả; để
+    trống dùng Task gần nhất.
+  </p>
+  <p>
+    Start triggers: [{"id":"manual","type":"manual"}]. Schedule dùng cron/intervalSec và timezone;
+    event dùng eventType; workflow dùng sourceWorkflowId. Có when JSON Logic, overlap queue/skip,
+    missed skip/catchUpLatest.
+  </p>
+</script>
+<script type="text/html" data-template-name="af-delay">
+  <div class="form-row">
+    <label for="node-input-name">Tên</label><input id="node-input-name" placeholder="delay" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-delaySec">delaySec</label
+    ><input id="node-input-delaySec" type="number" min="0" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-until">until</label><input id="node-input-until" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-timeout">timeout</label
+    ><textarea id="node-input-timeout" rows="5" style="width:100%;font-family:monospace"></textarea>
+  </div>
+  <div id="af-case-status"></div>
+  <p style="color:#666">Deploy chỉ lưu bản nháp. Publish trong Manager để kích hoạt phiên bản.</p>
+</script>
+<script type="text/html" data-help-name="af-delay">
+  <p>Node thụ động: chỉ Manager thực thi sau Publish.</p>
+  <p>
+    skill: nội dung hướng dẫn; input: template {{input}}, {{lastOutput}}, {{feedback}},
+    {{previousOutput}}, {{steps.NODE.text}}. timeout/execution: JSON cấu hình thời gian. null =
+    không giới hạn.
+  </p>
+  <p>
+    Condition cases: mảng JSON Logic, hỗ trợ and/or và var. Mỗi case tương ứng một cổng; cổng cuối
+    Otherwise. Ví dụ [{"and": [{"==": [{"var": "input.approved"}, true]}, {">": [{"var":
+    "input.score"}, 3]}]}]. Repeat target: id node cần lặp; maxIterations tính cả lượt đầu. delaySec
+    là thời gian chờ giữa các lượt. End outputNodeId chọn id Task hoặc Review để trả kết quả; để
+    trống dùng Task gần nhất.
+  </p>
+  <p>
+    Start triggers: [{"id":"manual","type":"manual"}]. Schedule dùng cron/intervalSec và timezone;
+    event dùng eventType; workflow dùng sourceWorkflowId. Có when JSON Logic, overlap queue/skip,
+    missed skip/catchUpLatest.
+  </p>
+</script>
+<script type="text/html" data-template-name="af-end">
+  <div class="form-row">
+    <label for="node-input-name">Tên</label><input id="node-input-name" placeholder="end" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-outcome">outcome</label><input id="node-input-outcome" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-outputNodeId">Output node ID</label
+    ><input id="node-input-outputNodeId" placeholder="Trống = Task gần nhất" />
+  </div>
+  <div id="af-case-status"></div>
+  <p style="color:#666">Deploy chỉ lưu bản nháp. Publish trong Manager để kích hoạt phiên bản.</p>
+</script>
+<script type="text/html" data-help-name="af-end">
+  <p>Node thụ động: chỉ Manager thực thi sau Publish.</p>
+  <p>
+    skill: nội dung hướng dẫn; input: template {{input}}, {{lastOutput}}, {{feedback}},
+    {{previousOutput}}, {{steps.NODE.text}}. timeout/execution: JSON cấu hình thời gian. null =
+    không giới hạn.
+  </p>
+  <p>
+    Condition cases: mảng JSON Logic, hỗ trợ and/or và var. Mỗi case tương ứng một cổng; cổng cuối
+    Otherwise. Ví dụ [{"and": [{"==": [{"var": "input.approved"}, true]}, {">": [{"var":
+    "input.score"}, 3]}]}]. Repeat target: id node cần lặp; maxIterations tính cả lượt đầu. delaySec
+    là thời gian chờ giữa các lượt. End outputNodeId chọn id Task hoặc Review để trả kết quả; để
+    trống dùng Task gần nhất.
+  </p>
+  <p>
+    Start triggers: [{"id":"manual","type":"manual"}]. Schedule dùng cron/intervalSec và timezone;
+    event dùng eventType; workflow dùng sourceWorkflowId. Có when JSON Logic, overlap queue/skip,
+    missed skip/catchUpLatest.
+  </p>
+</script>

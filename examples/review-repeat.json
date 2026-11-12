@@ -1,0 +1,81 @@
+[
+  {
+    "id": "example-review",
+    "type": "tab",
+    "label": "Viết → Đánh giá → Cải thiện",
+    "disabled": false
+  },
+  {
+    "id": "review-start",
+    "type": "af-start",
+    "z": "example-review",
+    "name": "Bắt đầu thủ công",
+    "triggers": "[{\"id\":\"manual\",\"type\":\"manual\"}]",
+    "execution": "{\"noProgressTimeoutSec\":600,\"timeoutAction\":\"warn\"}",
+    "limits": "{\"maxStepExecutions\":30}",
+    "x": 130,
+    "y": 200,
+    "wires": [["review-write"]]
+  },
+  {
+    "id": "review-write",
+    "type": "af-task",
+    "z": "example-review",
+    "name": "Viết và cải thiện",
+    "role": "default",
+    "skill": "Write a helpful Markdown article for the topic. On subsequent iterations, improve the previous draft using the review feedback. Return only the complete article.",
+    "input": "Topic: {{input.topic}}\nPrevious draft: {{previousOutput}}\nReview feedback: {{feedback}}",
+    "timeout": "{}",
+    "x": 360,
+    "y": 200,
+    "wires": [["review-check"]]
+  },
+  {
+    "id": "review-check",
+    "type": "af-review",
+    "z": "example-review",
+    "name": "Đánh giá chất lượng",
+    "role": "default",
+    "skill": "Review the supplied draft critically.",
+    "rubric": "Check factual care, clarity, structure and whether the requested topic is addressed. Pass only if score is at least 80.",
+    "input": "{{lastOutput}}",
+    "timeout": "{}",
+    "x": 610,
+    "y": 200,
+    "wires": [["review-gate"]]
+  },
+  {
+    "id": "review-gate",
+    "type": "af-condition",
+    "z": "example-review",
+    "name": "Đạt và điểm ≥ 80?",
+    "cases": "[{\"and\":[{\"==\":[{\"var\":\"review.passed\"},true]},{\">=\":[{\"var\":\"review.score\"},80]}]}]",
+    "outputs": 2,
+    "x": 870,
+    "y": 200,
+    "wires": [["review-end"], ["review-repeat"]]
+  },
+  {
+    "id": "review-repeat",
+    "type": "af-repeat",
+    "z": "example-review",
+    "name": "Tối đa 3 lượt",
+    "target": "review-write",
+    "maxIterations": 3,
+    "timeout": "{}",
+    "x": 850,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "review-end",
+    "type": "af-end",
+    "z": "example-review",
+    "name": "Hoàn thành",
+    "outcome": "succeeded",
+    "outputNodeId": "review-write",
+    "x": 1100,
+    "y": 180,
+    "wires": []
+  }
+]

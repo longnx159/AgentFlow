@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+.npm-cache/
+test-results/
+*.log
+.env
+.superpowers/

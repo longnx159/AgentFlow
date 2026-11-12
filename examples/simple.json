@@ -1,0 +1,43 @@
+[
+  {
+    "id": "example-simple",
+    "type": "tab",
+    "label": "Viết nội dung · mẫu cơ bản",
+    "disabled": false
+  },
+  {
+    "id": "simple-start",
+    "type": "af-start",
+    "z": "example-simple",
+    "name": "Bắt đầu",
+    "triggers": "[{\"id\":\"manual\",\"type\":\"manual\"}]",
+    "execution": "{}",
+    "limits": "{}",
+    "x": 140,
+    "y": 180,
+    "wires": [["simple-task"]]
+  },
+  {
+    "id": "simple-task",
+    "type": "af-task",
+    "z": "example-simple",
+    "name": "Viết nội dung",
+    "role": "default",
+    "skill": "Write a clear, useful Markdown answer for the supplied topic. Preserve relevant detail.",
+    "input": "{{input.topic}}",
+    "timeout": "{}",
+    "x": 360,
+    "y": 180,
+    "wires": [["simple-end"]]
+  },
+  {
+    "id": "simple-end",
+    "type": "af-end",
+    "z": "example-simple",
+    "name": "Hoàn thành",
+    "outcome": "succeeded",
+    "x": 580,
+    "y": 180,
+    "wires": []
+  }
+]

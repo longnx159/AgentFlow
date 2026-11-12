@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Agent Flow Worker</title
+  ><style>
+    body {
+      font: 16px system-ui;
+      background: #101722;
+      color: #e9edf5;
+      max-width: 920px;
+      margin: 40px auto;
+      padding: 0 24px;
+    }
+    h1 {
+      font-size: 28px;
+    }
+    section {
+      background: #1b2637;
+      border: 1px solid #354760;
+      border-radius: 14px;
+      padding: 22px;
+      margin: 20px 0;
+    }
+    label {
+      display: block;
+      margin: 12px 0;
+    }
+    input {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      padding: 10px;
+      background: #111a28;
+      color: white;
+      border: 1px solid #4f6584;
+      border-radius: 6px;
+    }
+    button {
+      background: #a4e1c5;
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 16px;
+      margin: 8px 8px 0 0;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+      color: #c3d6f0;
+    }
+    .muted {
+      color: #aebbd0;
+    }
+    a {
+      color: #a4e1c5;
+    }
+  </style>
+  <h1>Agent Flow Worker</h1>
+  <p class="muted">
+    Sign in to ChatGPT in this VM's isolated Chrome window. One attempt runs at a time; uncertain
+    work stays occupied for reconciliation.
+  </p>
+  <section>
+    <h2>Status</h2>
+    <p id="summary">Connecting…</p>
+    <button id="start">Connect / check for work</button>
+    <pre id="status"></pre>
+    <p id="result"></p>
+  </section>
+  <section>
+    <h2>Pair with Manager</h2>
+    <p class="muted">
+      Paste a pairing token created by your Manager. The issued worker credential stays in this VM.
+    </p>
+    <form id="pair">
+      <label
+        >Pairing token<input
+          name="pairingToken"
+          type="password"
+          autocomplete="off"
+          required /></label
+      ><button>Pair worker</button>
+    </form>
+  </section>
+  <section>
+    <h2>Configuration</h2>
+    <form id="config">
+      <label>Manager URL<input name="managerUrl" required /></label
+      ><label>Worker name<input name="name" required /></label
+      ><label>Roles, comma separated<input name="roles" required /></label
+      ><button>Save for next restart</button>
+    </form>
+    <p id="notice" class="muted"></p>
+  </section>
+  <script>
+    const el = (id) => document.getElementById(id);
+    let initialized = false;
+    async function post(path, body) {
+      const r = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await r.json();
+      if (!r.ok) throw Error(data.error || r.status);
+      return data;
+    }
+    async function refresh() {
+      try {
+        const s = await fetch('/api/local/status').then((r) => r.json());
+        el('summary').textContent =
+          `${s.name} · ${s.registered ? 'Manager connected' : 'Manager disconnected'} · ${s.active ? s.active.state : 'idle'}`;
+        el('status').textContent = JSON.stringify(
+          {
+            workerId: s.workerId,
+            browserReady: s.browserReady,
+            settingsVersion: s.settingsVersion,
+            lastError: s.lastError,
+            active: s.active,
+            attempts: s.attempts,
+          },
+          null,
+          2,
+        );
+        if (s.active) {
+          el('result').replaceChildren();
+          const a = document.createElement('a');
+          a.href = '/api/local/attempts/' + encodeURIComponent(s.active.id) + '/result';
+          a.textContent = 'Read current raw result';
+          el('result').append(a);
+        } else el('result').textContent = '';
+        if (!initialized) {
+          for (const key of ['managerUrl', 'name'])
+            el('config').elements[key].value = s.config[key];
+          el('config').elements.roles.value = s.config.roles.join(', ');
+          initialized = true;
+        }
+      } catch (e) {
+        el('summary').textContent = String(e);
+      }
+    }
+    el('start').onclick = () =>
+      post('/api/local/start')
+        .then(refresh)
+        .catch((e) => (el('notice').textContent = String(e)));
+    el('pair').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await post('/api/local/pair', { pairingToken: e.target.elements.pairingToken.value });
+        e.target.reset();
+        el('notice').textContent = 'Pairing requested.';
+        refresh();
+      } catch (e) {
+        el('notice').textContent = String(e);
+      }
+    };
+    el('config').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.target.elements;
+      try {
+        await post('/api/local/config', {
+          managerUrl: f.managerUrl.value,
+          name: f.name.value,
+          roles: f.roles.value
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+        });
+        el('notice').textContent = 'Saved. Restart the Worker to apply configuration.';
+      } catch (e) {
+        el('notice').textContent = String(e);
+      }
+    };
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</html>
