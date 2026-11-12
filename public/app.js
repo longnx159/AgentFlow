@@ -1,5 +1,14 @@
-'use strict';
+import { DEFAULT_LANG, STORAGE_KEY, normalizeLang, translate } from '/i18n.js';
+
 const $ = (id) => document.getElementById(id);
+let currentLang = (() => {
+  try {
+    return normalizeLang(localStorage.getItem(STORAGE_KEY) ?? DEFAULT_LANG);
+  } catch {
+    return DEFAULT_LANG;
+  }
+})();
+
 let state = {
   workflows: [],
   workers: [],
@@ -8,14 +17,13 @@ let state = {
   settings: null,
   view: 'overview',
   runId: null,
+  lastRunDetail: null,
+  lastSyncAt: null,
 };
-const names = {
-  overview: 'Tổng quan',
-  workflows: 'Workflows',
-  runs: 'Lịch sử chạy',
-  workers: 'Workers',
-  settings: 'Cấu hình',
-};
+
+const t = (key, params) => translate(currentLang, key, params);
+const locale = () => (currentLang === 'en' ? 'en-US' : 'vi-VN');
+
 const esc = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -26,7 +34,55 @@ const badge = (s) => `<span class="badge ${esc(s)}">${esc(s || 'unknown')}</span
 const empty = (title, text) =>
   `<div class="empty"><strong>${esc(title)}</strong>${esc(text)}</div>`;
 const time = (v) =>
-  v ? new Date(typeof v === 'number' ? v : Date.parse(v)).toLocaleString('vi-VN') : '—';
+  v ? new Date(typeof v === 'number' ? v : Date.parse(v)).toLocaleString(locale()) : '—';
+
+function applyStaticTranslations(root = document) {
+  if (root === document) {
+    document.documentElement.lang = currentLang;
+    document.title = t('app.title');
+    document.querySelectorAll('.lang-switch button[data-lang]').forEach((btn) => {
+      const active = btn.dataset.lang === currentLang;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+  root.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  root.querySelectorAll('[data-i18n-html]').forEach((el) => {
+    el.innerHTML = t(el.dataset.i18nHtml);
+  });
+  root.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
+  });
+  root.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.setAttribute('title', t(el.dataset.i18nTitle));
+  });
+  root.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  });
+  if (root === document) {
+    if ($('page-label')) $('page-label').textContent = t('nav.' + state.view);
+    if (state.lastSyncAt && $('last-sync')) {
+      $('last-sync').textContent = t('aside.syncedAt', {
+        time: new Date(state.lastSyncAt).toLocaleTimeString(locale()),
+      });
+    }
+  }
+}
+
+function setLanguage(lang) {
+  currentLang = normalizeLang(lang);
+  try {
+    localStorage.setItem(STORAGE_KEY, currentLang);
+  } catch {}
+  applyStaticTranslations();
+  if (!$('shell').hidden) {
+    render();
+    if (state.lastRunDetail && state.view === 'runs') renderRunDetail(state.lastRunDetail);
+  }
+}
+
 function notice(message, error = false) {
   $('notice').hidden = false;
   $('notice').className = error ? 'error' : '';
@@ -34,6 +90,7 @@ function notice(message, error = false) {
   clearTimeout(notice.timer);
   notice.timer = setTimeout(() => ($('notice').hidden = true), 9000);
 }
+
 async function api(url, options = {}) {
   const r = await fetch(url, {
     credentials: 'same-origin',
@@ -55,36 +112,43 @@ async function api(url, options = {}) {
   }
   return data;
 }
+
 function post(url, body) {
   return api(url, { method: 'POST', body: JSON.stringify(body) });
 }
+
 function definition(w) {
   return w.definition ?? w.graph ?? w;
 }
+
 function show(view) {
   state.view = view;
   document.querySelectorAll('.view').forEach((s) => (s.hidden = s.id !== view));
   document
     .querySelectorAll('nav button')
     .forEach((b) => b.classList.toggle('active', b.dataset.view === view));
-  $('page-label').textContent = names[view];
+  $('page-label').textContent = t('nav.' + view);
   if (view === 'settings' && !state.settings) refresh();
 }
+
 function table(headers, rows) {
   return `<table class="table"><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
+
 function runRows(runs) {
   return runs.map(
     (r) =>
-      `<tr><td><strong>${esc(r.workflowName ?? r.workflowId)}</strong><span class="id">${esc(r.id)}</span></td><td>${badge(r.state ?? r.status)}</td><td>${esc(time(r.createdAt ?? r.startedAt))}</td><td><button data-run="${esc(r.id)}">Xem trace →</button></td></tr>`,
+      `<tr><td><strong>${esc(r.workflowName ?? r.workflowId)}</strong><span class="id">${esc(r.id)}</span></td><td>${badge(r.state ?? r.status)}</td><td>${esc(time(r.createdAt ?? r.startedAt))}</td><td><button data-run="${esc(r.id)}">${esc(t('action.viewTrace'))}</button></td></tr>`,
   );
 }
+
 function workerRows(workers, compact = false) {
   return workers.map(
     (w) =>
-      `<tr><td><strong>${esc(w.name ?? w.id ?? w.workerId)}</strong><span class="id">${esc(w.id ?? w.workerId)}</span></td><td>${badge(w.status ?? (w.busy || w.attemptId ? 'busy' : w.online === false ? 'offline' : 'online'))}</td><td>${esc(w.settingsVersion ?? '—')}</td><td>${esc(w.attemptId ?? w.activeAttemptId ?? (w.busy ? 'Đang bận' : 'Sẵn sàng'))}</td>${compact ? '' : `<td>${esc(time(w.lastSeen ?? w.lastSeenAt ?? w.lastHeartbeatAt))}<details><summary>Kết nối hiệu lực</summary><pre>${esc(JSON.stringify(w.connection ?? {}, null, 2))}</pre></details></td>`}</tr>`,
+      `<tr><td><strong>${esc(w.name ?? w.id ?? w.workerId)}</strong><span class="id">${esc(w.id ?? w.workerId)}</span></td><td>${badge(w.status ?? (w.busy || w.attemptId ? 'busy' : w.online === false ? 'offline' : 'online'))}</td><td>${esc(w.settingsVersion ?? '—')}</td><td>${esc(w.attemptId ?? w.activeAttemptId ?? (w.busy ? t('worker.busy') : t('worker.idle')))}</td>${compact ? '' : `<td>${esc(time(w.lastSeen ?? w.lastSeenAt ?? w.lastHeartbeatAt))}<details><summary>${esc(t('worker.effectiveConn'))}</summary><pre>${esc(JSON.stringify(w.connection ?? {}, null, 2))}</pre></details></td>`}</tr>`,
   );
 }
+
 function render() {
   $('nav-flow-count').textContent = state.workflows.length;
   const active = state.runs.filter((r) =>
@@ -92,13 +156,13 @@ function render() {
   ).length;
   const online = state.workers.filter((w) => w.status !== 'offline' && w.online !== false).length;
   $('stats').innerHTML = [
-    ['Workflows đã publish', state.workflows.length, 'Phiên bản sẵn sàng', '⤳'],
-    ['Đang hoạt động', active, 'Đang chạy, chờ hoặc tạm dừng', '◷'],
-    ['Workers kết nối', online, `${state.workers.length} Worker đã đăng ký`, '▣'],
+    [t('stats.publishedLabel'), state.workflows.length, t('stats.publishedSub'), '⤳'],
+    [t('stats.activeLabel'), active, t('stats.activeSub'), '◷'],
+    [t('stats.workersLabel'), online, t('stats.workersSub', { count: state.workers.length }), '▣'],
     [
-      'Hoàn thành',
+      t('stats.succeededLabel'),
       state.runs.filter((r) => (r.state ?? r.status) === 'succeeded').length,
-      'Kết quả có thể tải nguyên bản',
+      t('stats.succeededSub'),
       '✓',
     ],
   ]
@@ -108,103 +172,98 @@ function render() {
     )
     .join('');
   $('recent-runs').innerHTML = state.runs.length
-    ? table(['Workflow', 'Trạng thái', 'Tạo lúc', ''], runRows(state.runs.slice(0, 6)))
-    : empty('Chưa có lượt chạy', 'Publish một workflow rồi bắt đầu với input của bạn.');
+    ? table(
+        [t('table.workflow'), t('table.status'), t('table.createdAt'), ''],
+        runRows(state.runs.slice(0, 6)),
+      )
+    : empty(t('empty.recentRunsTitle'), t('empty.recentRunsText'));
   $('run-list').innerHTML = state.runs.length
-    ? table(['Workflow / Run ID', 'Trạng thái', 'Tạo lúc', ''], runRows(state.runs))
-    : empty('Lịch sử đang trống', 'Các lượt chạy sẽ xuất hiện tại đây.');
+    ? table(
+        [t('table.workflowRunId'), t('table.status'), t('table.createdAt'), ''],
+        runRows(state.runs),
+      )
+    : empty(t('empty.runsTitle'), t('empty.runsText'));
   $('overview-workers').innerHTML = state.workers.length
     ? table(
-        ['Worker', 'Trạng thái', 'Cấu hình v.', 'Lần thực thi'],
+        [t('table.worker'), t('table.status'), t('table.settingsVersion'), t('table.attempt')],
         workerRows(state.workers, true),
       )
-    : empty('Chờ Worker đầu tiên', 'Khởi động Worker và ghép đôi với Manager.');
+    : empty(t('empty.overviewWorkersTitle'), t('empty.overviewWorkersText'));
   $('worker-list').innerHTML = state.workers.length
     ? table(
         [
-          'Worker / ID',
-          'Trạng thái',
-          'Cấu hình v.',
-          'Lần thực thi',
-          'Heartbeat / cấu hình hiệu lực',
+          t('table.workerId'),
+          t('table.status'),
+          t('table.settingsVersion'),
+          t('table.attempt'),
+          t('table.heartbeatConfig'),
         ],
         workerRows(state.workers),
       )
-    : empty('Chưa có Worker', 'Worker sẽ xuất hiện sau khi ghép đôi.');
+    : empty(t('empty.workersTitle'), t('empty.workersText'));
   const tabs = state.drafts.flows.filter((n) => n.type === 'tab');
   $('draft-list').innerHTML = tabs.length
     ? table(
-        ['Bản nháp', 'Node', 'Thao tác'],
+        [t('table.draft'), t('table.nodes'), t('table.actions')],
         tabs.map(
-          (t) =>
-            `<tr><td><strong>${esc(t.label || t.id)}</strong><span class="id">${esc(t.id)}</span></td><td>${state.drafts.flows.filter((n) => n.z === t.id && n.type !== 'comment').length}</td><td><div class="actions"><a href="/flows/#flow/${encodeURIComponent(t.id)}" target="_blank" class="button">Chỉnh sửa ↗</a><button data-clone-draft="${esc(t.id)}">Nhân bản</button><button data-publish="${esc(t.id)}" class="primary">Publish</button></div></td></tr>`,
+          (tNode) =>
+            `<tr><td><strong>${esc(tNode.label || tNode.id)}</strong><span class="id">${esc(tNode.id)}</span></td><td>${state.drafts.flows.filter((n) => n.z === tNode.id && n.type !== 'comment').length}</td><td><div class="actions"><a href="/flows/#flow/${encodeURIComponent(tNode.id)}" target="_blank" class="button">${esc(t('action.edit'))}</a><button data-clone-draft="${esc(tNode.id)}">${esc(t('action.clone'))}</button><button data-publish="${esc(tNode.id)}" class="primary">${esc(t('action.publish'))}</button></div></td></tr>`,
         ),
       )
-    : empty('Chưa có bản nháp', 'Tạo workflow mẫu hoặc mở Node-RED để thiết kế.');
+    : empty(t('empty.draftsTitle'), t('empty.draftsText'));
   $('workflow-list').innerHTML = state.workflows.length
     ? table(
-        ['Workflow', 'Phiên bản', 'Trạng thái', 'Thao tác'],
+        [t('table.workflow'), t('table.version'), t('table.status'), t('table.actions')],
         state.workflows.map((w) => {
           const d = definition(w);
-          return `<tr><td><strong>${esc(d.name ?? w.name)}</strong><span class="id">${esc(d.id ?? w.id)}</span></td><td>v${esc(w.version ?? d.version ?? 1)}</td><td>${badge(d.enabled ? 'enabled' : 'disabled')}</td><td><div class="actions"><button data-start="${esc(d.id)}" class="primary" ${!d.enabled ? 'disabled' : ''}>Chạy →</button><button data-toggle="${esc(d.id)}">${d.enabled ? 'Tắt' : 'Bật'}</button><button data-clone="${esc(d.id)}">Nhân bản</button><button data-export="${esc(d.id)}">JSON ↓</button></div></td></tr>`;
+          return `<tr><td><strong>${esc(d.name ?? w.name)}</strong><span class="id">${esc(d.id ?? w.id)}</span></td><td>v${esc(w.version ?? d.version ?? 1)}</td><td>${badge(d.enabled ? 'enabled' : 'disabled')}</td><td><div class="actions"><button data-start="${esc(d.id)}" class="primary" ${!d.enabled ? 'disabled' : ''}>${esc(t('action.run'))}</button><button data-toggle="${esc(d.id)}">${esc(d.enabled ? t('action.disable') : t('action.enable'))}</button><button data-clone="${esc(d.id)}">${esc(t('action.clone'))}</button><button data-export="${esc(d.id)}">${esc(t('action.exportJson'))}</button></div></td></tr>`;
         }),
       )
-    : empty(
-        'Chưa có phiên bản Publish',
-        'Deploy bản nháp trong Node-RED rồi bấm Publish ở phía trên.',
-      );
+    : empty(t('empty.workflowsTitle'), t('empty.workflowsText'));
   bindActions();
 }
+
 const settingGroups = {
   connection: [
-    'Kết nối Worker',
-    {
-      longPollWaitSec: 'Long poll · thời gian chờ',
-      longPollHttpTimeoutSec: 'HTTP long poll timeout',
-      apiRequestTimeoutSec: 'API request timeout',
-      heartbeatIntervalSec: 'Chu kỳ heartbeat',
-      offlineAfterSec: 'Đánh dấu offline sau',
-      preSendLeaseSec: 'Lease trước khi gửi',
-      artifactTransferIdleSec: 'Artifact idle timeout',
-    },
+    'longPollWaitSec',
+    'longPollHttpTimeoutSec',
+    'apiRequestTimeoutSec',
+    'heartbeatIntervalSec',
+    'offlineAfterSec',
+    'preSendLeaseSec',
+    'artifactTransferIdleSec',
   ],
   execution: [
-    'Thời gian thực thi',
-    {
-      noProgressTimeoutSec: 'Không có tiến triển',
-      stepTotalTimeoutSec: 'Giới hạn một bước',
-      workflowTotalTimeoutSec: 'Giới hạn toàn workflow',
-      timeoutAction: 'Hành động khi timeout',
-    },
+    'noProgressTimeoutSec',
+    'stepTotalTimeoutSec',
+    'workflowTotalTimeoutSec',
+    'timeoutAction',
   ],
   limits: [
-    'Giới hạn vận hành',
-    {
-      globalConcurrentRuns: 'Số lượt chạy đồng thời',
-      perWorkflowConcurrentRuns: 'Đồng thời / workflow',
-      maxQueuedRuns: 'Số lượt chờ tối đa',
-      maxStepExecutions: 'Số bước / lượt chạy',
-      maxChainRuns: 'Số workflow nối chuỗi',
-    },
+    'globalConcurrentRuns',
+    'perWorkflowConcurrentRuns',
+    'maxQueuedRuns',
+    'maxStepExecutions',
+    'maxChainRuns',
   ],
 };
+
 function renderSettings() {
   if (!state.settings) return;
   $('settings-form').innerHTML = Object.entries(settingGroups)
     .map(
-      ([group, [title, fields]]) =>
-        `<article class="panel settings-section"><div class="panel-title"><h2>${title}</h2><span class="muted">${group} · v${state.settings.version}</span></div><div class="settings-grid">${Object.entries(
-          fields,
-        )
+      ([group, keys]) =>
+        `<article class="panel settings-section"><div class="panel-title"><h2 data-i18n="settings.groups.${group}">${esc(t('settings.groups.' + group))}</h2><span class="muted">${group} · v${state.settings.version}</span></div><div class="settings-grid">${keys
           .map(
-            ([key, label]) =>
-              `<div class="field"><label for="set-${key}">${label}</label>${key === 'timeoutAction' ? `<select id="set-${key}" data-group="${group}" data-key="${key}">${['warn', 'pause', 'stop'].map((v) => `<option ${state.settings[group][key] === v ? 'selected' : ''}>${v}</option>`).join('')}</select>` : `<input id="set-${key}" data-group="${group}" data-key="${key}" type="number" min="0" placeholder="null · không giới hạn" value="${state.settings[group][key] ?? ''}">`}<small>${key}</small></div>`,
+            (key) =>
+              `<div class="field"><label for="set-${key}" data-i18n="settings.fields.${key}">${esc(t('settings.fields.' + key))}</label>${key === 'timeoutAction' ? `<select id="set-${key}" data-group="${group}" data-key="${key}">${['warn', 'pause', 'stop'].map((v) => `<option ${state.settings[group][key] === v ? 'selected' : ''}>${v}</option>`).join('')}</select>` : `<input id="set-${key}" data-group="${group}" data-key="${key}" type="number" min="0" data-i18n-placeholder="settings.nullPlaceholder" placeholder="${esc(t('settings.nullPlaceholder'))}" value="${state.settings[group][key] ?? ''}">`}<small>${key}</small></div>`,
           )
           .join('')}</div></article>`,
     )
     .join('');
   $('worker-overrides').value = JSON.stringify(state.settings.workerOverrides ?? {}, null, 2);
 }
+
 async function refresh(forceSettings = false) {
   try {
     const [workflows, runs, workers, drafts, settings] = await Promise.all([
@@ -220,17 +279,21 @@ async function refresh(forceSettings = false) {
     state.drafts = drafts;
     const first = !state.settings;
     state.settings = settings.settings ?? settings;
+    state.lastSyncAt = Date.now();
     $('login').hidden = true;
     $('shell').hidden = false;
     render();
     if (first || forceSettings) renderSettings();
-    $('last-sync').textContent = 'Đồng bộ ' + new Date().toLocaleTimeString('vi-VN');
+    $('last-sync').textContent = t('aside.syncedAt', {
+      time: new Date(state.lastSyncAt).toLocaleTimeString(locale()),
+    });
     if (state.runId && state.view === 'runs') await loadRun(state.runId);
   } catch (e) {
     if (!$('shell').hidden) notice(e.message, true);
     else $('login-error').textContent = e.message;
   }
 }
+
 async function jsonDialog(title, value, hint, action) {
   $('dialog-title').textContent = title;
   $('dialog-hint').textContent = hint;
@@ -250,6 +313,7 @@ async function jsonDialog(title, value, hint, action) {
     };
   });
 }
+
 function download(filename, value) {
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }),
@@ -260,6 +324,7 @@ function download(filename, value) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
 async function action(fn) {
   try {
     await fn();
@@ -268,6 +333,7 @@ async function action(fn) {
     notice(e.message, true);
   }
 }
+
 function bindActions() {
   document.querySelectorAll('[data-run]').forEach(
     (b) =>
@@ -284,27 +350,21 @@ function bindActions() {
             tabId: b.dataset.publish,
             revision: state.drafts.rev,
           });
-          notice('Đã Publish phiên bản workflow.');
+          notice(t('notice.published'));
         })),
   );
   document.querySelectorAll('[data-start]').forEach(
     (b) =>
       (b.onclick = () =>
-        jsonDialog(
-          'Bắt đầu lượt chạy',
-          { topic: '' },
-          'Input được truyền vào template của workflow.',
-          async (input) => {
-            const run = await post(
-              `/api/v1/workflows/${encodeURIComponent(b.dataset.start)}/runs`,
-              { input },
-            );
-            notice('Đã tạo lượt chạy.');
-            show('runs');
-            state.runId = run.id ?? run.run?.id;
-            await refresh();
-          },
-        )),
+        jsonDialog(t('dialog.startTitle'), { topic: '' }, t('dialog.startHint'), async (input) => {
+          const run = await post(`/api/v1/workflows/${encodeURIComponent(b.dataset.start)}/runs`, {
+            input,
+          });
+          notice(t('notice.runCreated'));
+          show('runs');
+          state.runId = run.id ?? run.run?.id;
+          await refresh();
+        })),
   );
   document.querySelectorAll('[data-toggle]').forEach(
     (b) =>
@@ -312,7 +372,7 @@ function bindActions() {
         action(async () => {
           const w = definition(state.workflows.find((w) => definition(w).id === b.dataset.toggle));
           await post('/api/v1/workflows', { ...w, enabled: !w.enabled });
-          notice('Đã cập nhật trạng thái workflow.');
+          notice(t('notice.workflowToggled'));
         })),
   );
   document.querySelectorAll('[data-clone]').forEach(
@@ -323,9 +383,9 @@ function bindActions() {
           await post('/api/v1/workflows', {
             ...w,
             id: crypto.randomUUID(),
-            name: w.name + ' · Bản sao',
+            name: w.name + t('clone.suffix'),
           });
-          notice('Đã nhân bản phiên bản workflow.');
+          notice(t('notice.workflowCloned'));
         })),
   );
   document
@@ -349,7 +409,7 @@ function bindActions() {
             ...n,
             id: ids.get(n.id),
             ...(n.z ? { z: ids.get(n.z) } : {}),
-            ...(n.type === 'tab' ? { label: (n.label || 'Workflow') + ' · Bản sao' } : {}),
+            ...(n.type === 'tab' ? { label: (n.label || 'Workflow') + t('clone.suffix') } : {}),
             ...(n.target ? { target: ids.get(n.target) ?? n.target } : {}),
             ...(n.outputNodeId ? { outputNodeId: ids.get(n.outputNodeId) ?? n.outputNodeId } : {}),
             ...(n.wires ? { wires: n.wires.map((out) => out.map((id) => ids.get(id) ?? id)) } : {}),
@@ -358,14 +418,14 @@ function bindActions() {
             rev: state.drafts.rev,
             flows: [...state.drafts.flows, ...clones],
           });
-          notice('Đã nhân bản bản nháp.');
+          notice(t('notice.draftCloned'));
         })),
   );
 }
-async function loadRun(id) {
-  const result = await api('/api/v1/runs/' + encodeURIComponent(id));
+
+function renderRunDetail(result) {
   const run = result.run ?? result;
-  state.runId = id;
+  const id = run.id ?? state.runId;
   $('run-detail').hidden = false;
   const artifacts = new Set();
   const collect = (value) => {
@@ -380,18 +440,23 @@ async function loadRun(id) {
   const active = (result.attempts ?? run.attempts ?? []).filter((a) =>
     ['assigned', 'sending', 'running', 'uncertain'].includes(a.state),
   );
+  const controlLabels = {
+    pause: t('action.pause'),
+    resume: t('action.resume'),
+    stop: t('action.stop'),
+  };
   $('run-detail').innerHTML =
-    `<div class="run-title"><div><h2>Trace lượt chạy</h2><span class="id">${esc(id)}</span></div><div class="actions">${['pause', 'resume', 'stop'].map((a) => `<button data-control="${a}">${{ pause: 'Tạm dừng', resume: 'Tiếp tục', stop: 'Dừng' }[a]}</button>`).join('')}</div></div><p>${badge(run.state ?? run.status)}</p>${[...artifacts].map((a) => `<div><span class="id">Artifact · ${esc(a)}</span><a class="artifact-link" download href="/api/v1/artifacts/${encodeURIComponent(a)}">↓ Markdown nguyên bản</a><a class="artifact-link" download href="/api/v1/artifacts/${encodeURIComponent(a)}?format=txt">↓ TXT</a><a class="artifact-link" download href="/api/v1/artifacts/${encodeURIComponent(a)}?format=json">↓ JSON</a></div>`).join('')}${
+    `<div class="run-title"><div><h2>${esc(t('run.traceTitle'))}</h2><span class="id">${esc(id)}</span></div><div class="actions">${['pause', 'resume', 'stop'].map((a) => `<button data-control="${a}">${esc(controlLabels[a])}</button>`).join('')}</div></div><p>${badge(run.state ?? run.status)}</p>${[...artifacts].map((a) => `<div><span class="id">Artifact · ${esc(a)}</span><a class="artifact-link" download href="/api/v1/artifacts/${encodeURIComponent(a)}">${esc(t('run.rawMarkdown'))}</a><a class="artifact-link" download href="/api/v1/artifacts/${encodeURIComponent(a)}?format=txt">↓ TXT</a><a class="artifact-link" download href="/api/v1/artifacts/${encodeURIComponent(a)}?format=json">↓ JSON</a></div>`).join('')}${
       active.length
-        ? `<div class="attempt-reconcile"><h2>Đối chiếu thủ công</h2><p class="muted">Mở hội thoại trên Worker để kiểm tra trước khi xử lý attempt. Hệ thống không tự gửi lại.</p>${table(
-            ['Attempt / Worker', 'Trạng thái', 'Thao tác'],
+        ? `<div class="attempt-reconcile"><h2>${esc(t('run.reconcileTitle'))}</h2><p class="muted">${esc(t('run.reconcileHint'))}</p>${table(
+            [t('table.attemptWorker'), t('table.status'), t('table.action')],
             active.map(
               (a) =>
-                `<tr><td><span class="id">${esc(a.id)}</span>${esc(a.workerId)}</td><td>${badge(a.state)}</td><td><button data-resolve="${esc(a.id)}">Kiểm tra và xử lý…</button></td></tr>`,
+                `<tr><td><span class="id">${esc(a.id)}</span>${esc(a.workerId)}</td><td>${badge(a.state)}</td><td><button data-resolve="${esc(a.id)}">${esc(t('action.inspectResolve'))}</button></td></tr>`,
             ),
           )}</div>`
         : ''
-    }<details open><summary>Trạng thái, các bước và sự kiện</summary><pre>${esc(JSON.stringify(result, null, 2))}</pre></details>`;
+    }<details open><summary>${esc(t('run.detailsSummary'))}</summary><pre>${esc(JSON.stringify(result, null, 2))}</pre></details>`;
   document.querySelectorAll('[data-control]').forEach(
     (b) =>
       (b.onclick = () =>
@@ -399,13 +464,21 @@ async function loadRun(id) {
           await post('/api/v1/runs/' + encodeURIComponent(id) + '/control', {
             action: b.dataset.control,
           });
-          notice('Đã gửi lệnh ' + b.textContent.toLowerCase());
+          notice(t('run.commandSent', { action: b.textContent.toLowerCase() }));
         })),
   );
   document
     .querySelectorAll('[data-resolve]')
     .forEach((b) => (b.onclick = () => openResolution(b.dataset.resolve)));
 }
+
+async function loadRun(id) {
+  const result = await api('/api/v1/runs/' + encodeURIComponent(id));
+  state.runId = id;
+  state.lastRunDetail = result;
+  renderRunDetail(result);
+}
+
 function openResolution(attemptId) {
   $('resolve-form').reset();
   $('resolve-error').textContent = '';
@@ -413,6 +486,7 @@ function openResolution(attemptId) {
   $('resolve-dialog').dataset.attemptId = attemptId;
   $('resolve-dialog').showModal();
 }
+
 $('resolve-cancel').onclick = $('resolve-back').onclick = () => $('resolve-dialog').close();
 $('resolve-form').onsubmit = async (e) => {
   e.preventDefault();
@@ -420,7 +494,7 @@ $('resolve-form').onsubmit = async (e) => {
     choice = new FormData(form).get('resolution'),
     note = $('resolve-note').value.trim();
   if (!['notSent', 'abandon'].includes(choice) || !note) {
-    $('resolve-error').textContent = 'Chọn kết quả kiểm tra và ghi rõ nội dung đã đối chiếu.';
+    $('resolve-error').textContent = t('resolve.validationError');
     return;
   }
   const button = form.querySelector('[type="submit"]');
@@ -431,7 +505,7 @@ $('resolve-form').onsubmit = async (e) => {
       { action: choice, note },
     );
     $('resolve-dialog').close();
-    notice('Đã lưu quyết định đối chiếu.');
+    notice(t('resolve.saved'));
     await refresh();
   } catch (error) {
     $('resolve-error').textContent = error.message;
@@ -458,9 +532,10 @@ async function createExample() {
       flows: [...state.drafts.flows, ...nodes],
     });
     show('workflows');
-    notice('Đã tạo bản nháp mẫu. Mở Node-RED để chỉnh sửa hoặc Publish.');
+    notice(t('notice.exampleCreated'));
   });
 }
+
 $('login-form').onsubmit = async (e) => {
   e.preventDefault();
   try {
@@ -471,6 +546,10 @@ $('login-form').onsubmit = async (e) => {
     $('login-error').textContent = e.message;
   }
 };
+
+document.querySelectorAll('.lang-switch button[data-lang]').forEach((b) => {
+  b.onclick = () => setLanguage(b.dataset.lang);
+});
 document.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => show(b.dataset.view)));
 document.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => show(b.dataset.go)));
 $('refresh').onclick = () => refresh();
@@ -495,36 +574,33 @@ $('save-settings').onclick = () =>
       body: JSON.stringify(settings),
     });
     renderSettings();
-    notice('Đã lưu cấu hình. Worker nhận phiên bản mới khi kết nối.');
+    notice(t('notice.settingsSaved'));
   });
 $('export-settings').onclick = () => download('agent-flow-settings.json', state.settings);
 $('import-settings').onclick = () =>
   jsonDialog(
-    'Nhập cấu hình',
+    t('dialog.importSettingsTitle'),
     state.settings,
-    'Cấu hình được kiểm tra tại Manager trước khi lưu.',
+    t('dialog.importSettingsHint'),
     async (value) => {
       await api('/api/v1/settings', { method: 'PUT', body: JSON.stringify(value) });
       await refresh(true);
-      notice('Đã nhập cấu hình.');
+      notice(t('notice.settingsImported'));
     },
   );
 $('import-workflow').onclick = () =>
-  jsonDialog(
-    'Nhập workflow hoặc bản nháp',
-    {},
-    'WorkflowDefinition → Publish; mảng Node-RED → thêm bản nháp.',
-    async (value) => {
-      if (Array.isArray(value))
-        await post('/api/v1/editor/drafts', {
-          rev: state.drafts.rev,
-          flows: [...state.drafts.flows, ...value],
-        });
-      else await post('/api/v1/workflows', value);
-      await refresh();
-      notice('Đã nhập JSON.');
-    },
-  );
+  jsonDialog(t('dialog.importWorkflowTitle'), {}, t('dialog.importWorkflowHint'), async (value) => {
+    if (Array.isArray(value))
+      await post('/api/v1/editor/drafts', {
+        rev: state.drafts.rev,
+        flows: [...state.drafts.flows, ...value],
+      });
+    else await post('/api/v1/workflows', value);
+    await refresh();
+    notice(t('notice.jsonImported'));
+  });
+
+applyStaticTranslations();
 refresh();
 setInterval(() => {
   if (!$('shell').hidden && state.view !== 'settings' && !$('json-dialog').open) refresh();

@@ -8,38 +8,55 @@
   </head>
   <body>
     <div id="login" class="login">
-      <form id="login-form" class="login-card">
-        <div class="mark">af<span>↗</span></div>
-        <p class="eyebrow">WORKFLOW OPERATIONS</p>
-        <h1>Không gian điều phối<br />của bạn.</h1>
-        <p>Kết nối Worker, thiết kế luồng và theo dõi từng bước thực thi.</p>
-        <label for="token">Admin token</label
-        ><input
-          id="token"
-          type="password"
-          autocomplete="current-password"
-          required
-          placeholder="Nhập token của Manager"
-        /><button class="primary" type="submit">Mở Manager <span>→</span></button
-        ><small>Phiên đăng nhập dùng cookie httpOnly.</small>
-        <p id="login-error" class="error" role="alert"></p>
-      </form>
+      <div class="login-wrap">
+        <div class="login-lang">
+          <div class="lang-switch" role="group" aria-label="Language">
+            <button type="button" data-lang="vi">VI</button>
+            <button type="button" data-lang="en">EN</button>
+          </div>
+        </div>
+        <form id="login-form" class="login-card">
+          <div class="mark">af<span>↗</span></div>
+          <p class="eyebrow" data-i18n="login.eyebrow">WORKFLOW OPERATIONS</p>
+          <h1 data-i18n-html="login.heading">Không gian điều phối<br />của bạn.</h1>
+          <p data-i18n="login.subtitle">
+            Kết nối Worker, thiết kế luồng và theo dõi từng bước thực thi.
+          </p>
+          <label for="token" data-i18n="login.tokenLabel">Admin token</label
+          ><input
+            id="token"
+            type="password"
+            autocomplete="current-password"
+            required
+            data-i18n-placeholder="login.tokenPlaceholder"
+            placeholder="Nhập token của Manager"
+          /><button class="primary" type="submit">
+            <span data-i18n="login.submit">Mở Manager</span> <span>→</span></button
+          ><small data-i18n="login.hint">Phiên đăng nhập dùng cookie httpOnly.</small>
+          <p id="login-error" class="error" role="alert"></p>
+        </form>
+      </div>
     </div>
     <div id="shell" hidden>
       <aside>
         <a class="brand" href="/">af<span>Agent Flow</span></a>
         <div class="workspace-label">WORKSPACE <span>LOCAL</span></div>
-        <nav aria-label="Điều hướng">
-          <button data-view="overview" class="active">◫ <span>Tổng quan</span></button
+        <nav data-i18n-aria="nav.aria" aria-label="Điều hướng">
+          <button data-view="overview" class="active">
+            ◫ <span data-i18n="nav.overview">Tổng quan</span></button
           ><button data-view="workflows">
-            ⤳ <span>Workflows</span><b id="nav-flow-count">0</b></button
-          ><button data-view="runs">◷ <span>Lịch sử chạy</span></button
-          ><button data-view="workers">▣ <span>Workers</span></button
-          ><button data-view="settings">⚙ <span>Cấu hình</span></button>
+            ⤳ <span data-i18n="nav.workflows">Workflows</span><b id="nav-flow-count">0</b></button
+          ><button data-view="runs">◷ <span data-i18n="nav.runs">Lịch sử chạy</span></button
+          ><button data-view="workers">▣ <span data-i18n="nav.workers">Workers</span></button
+          ><button data-view="settings">⚙ <span data-i18n="nav.settings">Cấu hình</span></button>
         </nav>
-        <a href="/flows/" target="_blank" class="editor-link">Mở trình thiết kế <span>↗</span></a>
+        <a href="/flows/" target="_blank" class="editor-link"
+          ><span data-i18n="nav.openEditor">Mở trình thiết kế</span> <span>↗</span></a
+        >
         <div class="aside-footer">
-          <span class="dot"></span> Manager đang kết nối<small id="last-sync">Đang đồng bộ…</small>
+          <span class="dot"></span>
+          <span data-i18n="aside.connected">Manager đang kết nối</span
+          ><small id="last-sync" data-i18n="aside.syncing">Đang đồng bộ…</small>
         </div>
       </aside>
       <main>
@@ -48,8 +65,20 @@
             Workspace <span>/</span> <strong id="page-label">Tổng quan</strong>
           </div>
           <div class="header-right">
-            <span class="live"><i class="dot"></i> Hệ thống cục bộ</span
-            ><button id="refresh" class="icon-button" title="Làm mới">↻</button
+            <span class="live"
+              ><i class="dot"></i> <span data-i18n="header.localSystem">Hệ thống cục bộ</span></span
+            >
+            <div class="lang-switch" role="group" aria-label="Language">
+              <button type="button" data-lang="vi">VI</button>
+              <button type="button" data-lang="en">EN</button>
+            </div>
+            <button
+              id="refresh"
+              class="icon-button"
+              data-i18n-title="header.refreshTitle"
+              title="Làm mới"
+            >
+              ↻</button
             ><span class="avatar">AD</span>
           </div>
         </header>
@@ -58,40 +87,52 @@
           <section id="overview" class="view">
             <div class="title-row">
               <div>
-                <p class="eyebrow">CONTROL CENTER</p>
-                <h1>Mọi luồng, trong tầm kiểm soát.</h1>
-                <p class="subtitle">Một nơi để thiết kế, điều phối và quan sát công việc.</p>
+                <p class="eyebrow" data-i18n="overview.eyebrow">CONTROL CENTER</p>
+                <h1 data-i18n="overview.heading">Mọi luồng, trong tầm kiểm soát.</h1>
+                <p class="subtitle" data-i18n="overview.subtitle">
+                  Một nơi để thiết kế, điều phối và quan sát công việc.
+                </p>
               </div>
-              <button class="primary" id="new-example">＋ Tạo workflow mẫu</button>
+              <button class="primary" id="new-example" data-i18n="overview.newExample">
+                ＋ Tạo workflow mẫu
+              </button>
             </div>
             <div class="stats" id="stats"></div>
             <div class="grid-overview">
               <article class="panel">
                 <div class="panel-title">
-                  <h2>Hoạt động gần đây</h2>
-                  <button data-go="runs" class="text-button">Xem tất cả →</button>
+                  <h2 data-i18n="overview.recentRuns">Hoạt động gần đây</h2>
+                  <button data-go="runs" class="text-button" data-i18n="overview.viewAll">
+                    Xem tất cả →
+                  </button>
                 </div>
                 <div id="recent-runs"></div>
               </article>
               <article class="panel guide">
-                <p class="eyebrow">THIẾT KẾ → PUBLISH → CHẠY</p>
-                <h2>Từ ý tưởng đến<br />luồng tự động.</h2>
-                <p>
+                <p class="eyebrow" data-i18n="overview.guideEyebrow">THIẾT KẾ → PUBLISH → CHẠY</p>
+                <h2 data-i18n-html="overview.guideHeading">Từ ý tưởng đến<br />luồng tự động.</h2>
+                <p data-i18n="overview.guideText">
                   Kéo thả các node trong Node-RED. Deploy lưu bản nháp; Publish tạo phiên bản dùng
                   để thực thi.
                 </p>
                 <ol>
-                  <li><span>01</span> Thiết kế nháp</li>
-                  <li><span>02</span> Publish phiên bản</li>
-                  <li><span>03</span> Chạy và theo dõi trace</li>
+                  <li><span>01</span> <span data-i18n="overview.step1">Thiết kế nháp</span></li>
+                  <li><span>02</span> <span data-i18n="overview.step2">Publish phiên bản</span></li>
+                  <li>
+                    <span>03</span> <span data-i18n="overview.step3">Chạy và theo dõi trace</span>
+                  </li>
                 </ol>
-                <a href="/flows/" target="_blank" class="secondary">Mở trình thiết kế ↗</a>
+                <a href="/flows/" target="_blank" class="secondary" data-i18n="overview.openEditor"
+                  >Mở trình thiết kế ↗</a
+                >
               </article>
             </div>
             <article class="panel">
               <div class="panel-title">
-                <h2>Worker đã kết nối</h2>
-                <button data-go="workers" class="text-button">Quản lý Workers →</button>
+                <h2 data-i18n="overview.connectedWorkers">Worker đã kết nối</h2>
+                <button data-go="workers" class="text-button" data-i18n="overview.manageWorkers">
+                  Quản lý Workers →
+                </button>
               </div>
               <div id="overview-workers"></div>
             </article>
@@ -99,33 +140,41 @@
           <section id="workflows" class="view" hidden>
             <div class="title-row">
               <div>
-                <p class="eyebrow">DESIGN & PUBLISH</p>
-                <h1>Workflows</h1>
-                <p class="subtitle">Bản nháp được lưu riêng với phiên bản đang hoạt động.</p>
+                <p class="eyebrow" data-i18n="workflows.eyebrow">DESIGN &amp; PUBLISH</p>
+                <h1 data-i18n="workflows.heading">Workflows</h1>
+                <p class="subtitle" data-i18n="workflows.subtitle">
+                  Bản nháp được lưu riêng với phiên bản đang hoạt động.
+                </p>
               </div>
               <div class="actions">
-                <button id="import-workflow">Nhập JSON</button
-                ><a href="/flows/" target="_blank" class="primary">Mở Node-RED ↗</a>
+                <button id="import-workflow" data-i18n="workflows.importJson">Nhập JSON</button
+                ><a href="/flows/" target="_blank" class="primary" data-i18n="workflows.openNodeRed"
+                  >Mở Node-RED ↗</a
+                >
               </div>
             </div>
             <article class="panel">
               <div class="panel-title">
-                <h2>Bản nháp Node-RED</h2>
-                <span class="muted">Deploy trước khi Publish</span>
+                <h2 data-i18n="workflows.draftsTitle">Bản nháp Node-RED</h2>
+                <span class="muted" data-i18n="workflows.draftsHint">Deploy trước khi Publish</span>
               </div>
               <div id="draft-list"></div>
             </article>
             <article class="panel">
-              <div class="panel-title"><h2>Phiên bản đã Publish</h2></div>
+              <div class="panel-title">
+                <h2 data-i18n="workflows.publishedTitle">Phiên bản đã Publish</h2>
+              </div>
               <div id="workflow-list"></div>
             </article>
           </section>
           <section id="runs" class="view" hidden>
             <div class="title-row">
               <div>
-                <p class="eyebrow">EXECUTION HISTORY</p>
-                <h1>Lịch sử chạy</h1>
-                <p class="subtitle">Trạng thái bền vững, trace từng node và kết quả nguyên bản.</p>
+                <p class="eyebrow" data-i18n="runs.eyebrow">EXECUTION HISTORY</p>
+                <h1 data-i18n="runs.heading">Lịch sử chạy</h1>
+                <p class="subtitle" data-i18n="runs.subtitle">
+                  Trạng thái bền vững, trace từng node và kết quả nguyên bản.
+                </p>
               </div>
             </div>
             <article class="panel"><div id="run-list"></div></article>
@@ -134,19 +183,23 @@
           <section id="workers" class="view" hidden>
             <div class="title-row">
               <div>
-                <p class="eyebrow">EXECUTION FLEET</p>
-                <h1>Workers</h1>
-                <p class="subtitle">Mỗi Worker xử lý tối đa một lần thực thi tại một thời điểm.</p>
+                <p class="eyebrow" data-i18n="workers.eyebrow">EXECUTION FLEET</p>
+                <h1 data-i18n="workers.heading">Workers</h1>
+                <p class="subtitle" data-i18n="workers.subtitle">
+                  Mỗi Worker xử lý tối đa một lần thực thi tại một thời điểm.
+                </p>
               </div>
             </div>
             <article class="panel"><div id="worker-list"></div></article>
             <article class="panel">
-              <div class="panel-title"><h2>Kết nối Worker</h2></div>
-              <p class="muted">
+              <div class="panel-title">
+                <h2 data-i18n="workers.connectTitle">Kết nối Worker</h2>
+              </div>
+              <p class="muted" data-i18n="workers.connectDesc1">
                 Khởi động Worker với URL Manager và pairing token. Worker tự nhận cấu hình và gửi
                 heartbeat.
               </p>
-              <p>
+              <p data-i18n="workers.connectDesc2">
                 Không tự chạy lại tác vụ có kết quả chưa xác định. Đối chiếu phiên hội thoại trước
                 khi xử lý thủ công.
               </p>
@@ -155,26 +208,30 @@
           <section id="settings" class="view" hidden>
             <div class="title-row">
               <div>
-                <p class="eyebrow">SYSTEM PREFERENCES</p>
-                <h1>Cấu hình hệ thống</h1>
-                <p class="subtitle">
+                <p class="eyebrow" data-i18n="settings.eyebrow">SYSTEM PREFERENCES</p>
+                <h1 data-i18n="settings.heading">Cấu hình hệ thống</h1>
+                <p class="subtitle" data-i18n="settings.subtitle">
                   Áp dụng trực tiếp vào cấu hình Manager. Thời gian tính bằng giây.
                 </p>
               </div>
               <div class="actions">
-                <button id="import-settings">Nhập JSON</button
-                ><button id="export-settings">Xuất JSON ↓</button
-                ><button class="primary" id="save-settings">Lưu thay đổi</button>
+                <button id="import-settings" data-i18n="settings.importJson">Nhập JSON</button
+                ><button id="export-settings" data-i18n="settings.exportJson">Xuất JSON ↓</button
+                ><button class="primary" id="save-settings" data-i18n="settings.save">
+                  Lưu thay đổi
+                </button>
               </div>
             </div>
             <div id="settings-form"></div>
             <article class="panel">
               <div class="panel-title">
-                <h2>Ghi đè theo Worker</h2>
-                <span class="muted">JSON: workerId → connection overrides</span>
+                <h2 data-i18n="settings.overridesTitle">Ghi đè theo Worker</h2>
+                <span class="muted" data-i18n="settings.overridesHint"
+                  >JSON: workerId → connection overrides</span
+                >
               </div>
               <textarea id="worker-overrides" rows="7" spellcheck="false"></textarea>
-              <p class="muted">
+              <p class="muted" data-i18n="settings.overridesHelp">
                 Kết nối: toàn cục → Worker. Thực thi: toàn cục → workflow → node. null nghĩa là
                 không giới hạn.
               </p>
@@ -188,59 +245,77 @@
       <form method="dialog" id="json-form">
         <div class="panel-title">
           <h2 id="dialog-title">JSON</h2>
-          <button value="cancel" class="icon-button" aria-label="Đóng">×</button>
+          <button
+            value="cancel"
+            class="icon-button"
+            data-i18n-aria="dialog.close"
+            aria-label="Đóng"
+          >
+            ×
+          </button>
         </div>
         <p id="dialog-hint" class="muted"></p>
         <textarea id="dialog-json" rows="15" spellcheck="false"></textarea>
         <div class="dialog-actions">
-          <button value="cancel">Hủy</button
-          ><button class="primary" id="dialog-confirm" value="ok">Xác nhận</button>
+          <button value="cancel" data-i18n="dialog.cancel">Hủy</button
+          ><button class="primary" id="dialog-confirm" value="ok" data-i18n="dialog.confirm">
+            Xác nhận
+          </button>
         </div>
       </form>
     </dialog>
     <dialog id="resolve-dialog">
       <form id="resolve-form">
         <div class="panel-title">
-          <h2>Đối chiếu lần thực thi</h2>
-          <button id="resolve-cancel" type="button" class="icon-button" aria-label="Đóng">×</button>
+          <h2 data-i18n="resolve.title">Đối chiếu lần thực thi</h2>
+          <button
+            id="resolve-cancel"
+            type="button"
+            class="icon-button"
+            data-i18n-aria="dialog.close"
+            aria-label="Đóng"
+          >
+            ×
+          </button>
         </div>
-        <p class="muted">
+        <p class="muted" data-i18n="resolve.hint">
           Kiểm tra trực tiếp hội thoại và trạng thái Worker trước khi quyết định. Chỉ chọn “chưa
           gửi” khi bạn đã xác nhận không có lần gửi nào xảy ra.
         </p>
         <p id="resolve-attempt" class="id"></p>
         <fieldset class="resolution-options">
-          <legend>Kết quả kiểm tra của bạn</legend>
+          <legend data-i18n="resolve.legend">Kết quả kiểm tra của bạn</legend>
           <label
             ><input type="radio" name="resolution" value="notSent" required /><span
-              ><strong>Đã kiểm tra: chưa gửi</strong
-              ><small
+              ><strong data-i18n="resolve.notSentTitle">Đã kiểm tra: chưa gửi</strong
+              ><small data-i18n="resolve.notSentDesc"
                 >Đóng attempt này và đưa tác vụ chưa gửi về hàng chờ để tạo attempt mới.</small
               ></span
             ></label
           ><label
             ><input type="radio" name="resolution" value="abandon" required /><span
-              ><strong>Hủy attempt sau khi kiểm tra</strong
-              ><small
+              ><strong data-i18n="resolve.abandonTitle">Hủy attempt sau khi kiểm tra</strong
+              ><small data-i18n="resolve.abandonDesc"
                 >Hủy attempt và dừng lượt chạy hiện tại. Giữ ghi chú kiểm tra trong nhật ký.</small
               ></span
             ></label
           >
         </fieldset>
-        <label for="resolve-note">Ghi chú kiểm tra bắt buộc</label
+        <label for="resolve-note" data-i18n="resolve.noteLabel">Ghi chú kiểm tra bắt buộc</label
         ><textarea
           id="resolve-note"
           rows="4"
           required
+          data-i18n-placeholder="resolve.notePlaceholder"
           placeholder="Bạn đã kiểm tra hội thoại nào, thấy trạng thái gì và vì sao chọn hành động này?"
         ></textarea>
         <p id="resolve-error" class="error" role="alert"></p>
         <div class="dialog-actions">
-          <button type="button" id="resolve-back">Quay lại</button
-          ><button type="submit" class="primary">Xác nhận xử lý</button>
+          <button type="button" id="resolve-back" data-i18n="resolve.back">Quay lại</button
+          ><button type="submit" class="primary" data-i18n="resolve.submit">Xác nhận xử lý</button>
         </div>
       </form>
     </dialog>
-    <script src="/app.js" defer></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

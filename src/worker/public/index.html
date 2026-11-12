@@ -13,8 +13,35 @@
       margin: 40px auto;
       padding: 0 24px;
     }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
     h1 {
       font-size: 28px;
+      margin: 0;
+    }
+    .lang-switch {
+      display: inline-flex;
+      background: #1b2637;
+      border: 1px solid #354760;
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+    .lang-switch button {
+      margin: 0;
+      padding: 5px 10px;
+      background: transparent;
+      color: #aebbd0;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+    .lang-switch button.active {
+      background: #a4e1c5;
+      color: #101722;
     }
     section {
       background: #1b2637;
@@ -36,6 +63,7 @@
       color: white;
       border: 1px solid #4f6584;
       border-radius: 6px;
+      margin-top: 6px;
     }
     button {
       background: #a4e1c5;
@@ -59,46 +87,139 @@
       color: #a4e1c5;
     }
   </style>
-  <h1>Agent Flow Worker</h1>
-  <p class="muted">
+  <div class="top-bar">
+    <h1 data-i18n="title">Agent Flow Worker</h1>
+    <div class="lang-switch" role="group" aria-label="Language">
+      <button type="button" data-lang="vi">VI</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
+  </div>
+  <p class="muted" data-i18n="subtitle">
     Sign in to ChatGPT in this VM's isolated Chrome window. One attempt runs at a time; uncertain
     work stays occupied for reconciliation.
   </p>
   <section>
-    <h2>Status</h2>
-    <p id="summary">Connecting…</p>
-    <button id="start">Connect / check for work</button>
+    <h2 data-i18n="status.heading">Status</h2>
+    <p id="summary" data-i18n="status.connecting">Connecting…</p>
+    <button id="start" data-i18n="status.startBtn">Connect / check for work</button>
     <pre id="status"></pre>
     <p id="result"></p>
   </section>
   <section>
-    <h2>Pair with Manager</h2>
-    <p class="muted">
+    <h2 data-i18n="pair.heading">Pair with Manager</h2>
+    <p class="muted" data-i18n="pair.desc">
       Paste a pairing token created by your Manager. The issued worker credential stays in this VM.
     </p>
     <form id="pair">
       <label
-        >Pairing token<input
-          name="pairingToken"
-          type="password"
-          autocomplete="off"
-          required /></label
-      ><button>Pair worker</button>
+        ><span data-i18n="pair.tokenLabel">Pairing token</span
+        ><input name="pairingToken" type="password" autocomplete="off" required /></label
+      ><button data-i18n="pair.submit">Pair worker</button>
     </form>
   </section>
   <section>
-    <h2>Configuration</h2>
+    <h2 data-i18n="config.heading">Configuration</h2>
     <form id="config">
-      <label>Manager URL<input name="managerUrl" required /></label
-      ><label>Worker name<input name="name" required /></label
-      ><label>Roles, comma separated<input name="roles" required /></label
-      ><button>Save for next restart</button>
+      <label
+        ><span data-i18n="config.managerUrl">Manager URL</span
+        ><input name="managerUrl" required /></label
+      ><label
+        ><span data-i18n="config.workerName">Worker name</span><input name="name" required /></label
+      ><label
+        ><span data-i18n="config.roles">Roles, comma separated</span
+        ><input name="roles" required /></label
+      ><button data-i18n="config.submit">Save for next restart</button>
     </form>
     <p id="notice" class="muted"></p>
   </section>
   <script>
     const el = (id) => document.getElementById(id);
+    const STORAGE_KEY = 'af_lang';
+    const DICT = {
+      en: {
+        title: 'Agent Flow Worker',
+        subtitle:
+          "Sign in to ChatGPT in this VM's isolated Chrome window. One attempt runs at a time; uncertain work stays occupied for reconciliation.",
+        'status.heading': 'Status',
+        'status.connecting': 'Connecting…',
+        'status.startBtn': 'Connect / check for work',
+        'status.connected': 'Manager connected',
+        'status.disconnected': 'Manager disconnected',
+        'status.idle': 'idle',
+        'status.readResult': 'Read current raw result',
+        'pair.heading': 'Pair with Manager',
+        'pair.desc':
+          'Paste a pairing token created by your Manager. The issued worker credential stays in this VM.',
+        'pair.tokenLabel': 'Pairing token',
+        'pair.submit': 'Pair worker',
+        'pair.requested': 'Pairing requested.',
+        'config.heading': 'Configuration',
+        'config.managerUrl': 'Manager URL',
+        'config.workerName': 'Worker name',
+        'config.roles': 'Roles, comma separated',
+        'config.submit': 'Save for next restart',
+        'config.saved': 'Saved. Restart the Worker to apply configuration.',
+      },
+      vi: {
+        title: 'Agent Flow Worker',
+        subtitle:
+          'Đăng nhập ChatGPT trên cửa sổ Chrome riêng của VM này. Mỗi lần chỉ chạy một attempt; tác vụ chưa xác định sẽ giữ trạng thái bận để đối chiếu.',
+        'status.heading': 'Trạng thái',
+        'status.connecting': 'Đang kết nối…',
+        'status.startBtn': 'Kết nối / kiểm tra việc mới',
+        'status.connected': 'Đã kết nối Manager',
+        'status.disconnected': 'Chưa kết nối Manager',
+        'status.idle': 'sẵn sàng',
+        'status.readResult': 'Đọc kết quả thô hiện tại',
+        'pair.heading': 'Ghép đôi với Manager',
+        'pair.desc':
+          'Dán pairing token do Manager tạo. Thông tin xác thực Worker được lưu cục bộ trên VM này.',
+        'pair.tokenLabel': 'Pairing token',
+        'pair.submit': 'Ghép đôi Worker',
+        'pair.requested': 'Đã gửi yêu cầu ghép đôi.',
+        'config.heading': 'Cấu hình',
+        'config.managerUrl': 'URL Manager',
+        'config.workerName': 'Tên Worker',
+        'config.roles': 'Roles, cách nhau bằng dấu phẩy',
+        'config.submit': 'Lưu cho lần khởi động sau',
+        'config.saved': 'Đã lưu. Khởi động lại Worker để áp dụng cấu hình.',
+      },
+    };
+    let lang = (() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        return saved === 'vi' || saved === 'en' ? saved : 'en';
+      } catch {
+        return 'en';
+      }
+    })();
+    const t = (key) => DICT[lang][key] ?? DICT.en[key] ?? key;
+    let lastStatus = null;
     let initialized = false;
+
+    function applyLang() {
+      document.documentElement.lang = lang;
+      document.querySelectorAll('.lang-switch button[data-lang]').forEach((b) => {
+        const active = b.dataset.lang === lang;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', String(active));
+      });
+      document.querySelectorAll('[data-i18n]').forEach((node) => {
+        node.textContent = t(node.dataset.i18n);
+      });
+      if (lastStatus) renderStatus(lastStatus);
+    }
+
+    document.querySelectorAll('.lang-switch button[data-lang]').forEach((b) => {
+      b.onclick = () => {
+        lang = b.dataset.lang;
+        try {
+          localStorage.setItem(STORAGE_KEY, lang);
+        } catch {}
+        applyLang();
+      };
+    });
+
     async function post(path, body) {
       const r = await fetch(path, {
         method: 'POST',
@@ -109,30 +230,36 @@
       if (!r.ok) throw Error(data.error || r.status);
       return data;
     }
+
+    function renderStatus(s) {
+      el('summary').textContent =
+        `${s.name} · ${s.registered ? t('status.connected') : t('status.disconnected')} · ${s.active ? s.active.state : t('status.idle')}`;
+      el('status').textContent = JSON.stringify(
+        {
+          workerId: s.workerId,
+          browserReady: s.browserReady,
+          settingsVersion: s.settingsVersion,
+          lastError: s.lastError,
+          active: s.active,
+          attempts: s.attempts,
+        },
+        null,
+        2,
+      );
+      if (s.active) {
+        el('result').replaceChildren();
+        const a = document.createElement('a');
+        a.href = '/api/local/attempts/' + encodeURIComponent(s.active.id) + '/result';
+        a.textContent = t('status.readResult');
+        el('result').append(a);
+      } else el('result').textContent = '';
+    }
+
     async function refresh() {
       try {
         const s = await fetch('/api/local/status').then((r) => r.json());
-        el('summary').textContent =
-          `${s.name} · ${s.registered ? 'Manager connected' : 'Manager disconnected'} · ${s.active ? s.active.state : 'idle'}`;
-        el('status').textContent = JSON.stringify(
-          {
-            workerId: s.workerId,
-            browserReady: s.browserReady,
-            settingsVersion: s.settingsVersion,
-            lastError: s.lastError,
-            active: s.active,
-            attempts: s.attempts,
-          },
-          null,
-          2,
-        );
-        if (s.active) {
-          el('result').replaceChildren();
-          const a = document.createElement('a');
-          a.href = '/api/local/attempts/' + encodeURIComponent(s.active.id) + '/result';
-          a.textContent = 'Read current raw result';
-          el('result').append(a);
-        } else el('result').textContent = '';
+        lastStatus = s;
+        renderStatus(s);
         if (!initialized) {
           for (const key of ['managerUrl', 'name'])
             el('config').elements[key].value = s.config[key];
@@ -143,6 +270,7 @@
         el('summary').textContent = String(e);
       }
     }
+
     el('start').onclick = () =>
       post('/api/local/start')
         .then(refresh)
@@ -152,7 +280,7 @@
       try {
         await post('/api/local/pair', { pairingToken: e.target.elements.pairingToken.value });
         e.target.reset();
-        el('notice').textContent = 'Pairing requested.';
+        el('notice').textContent = t('pair.requested');
         refresh();
       } catch (e) {
         el('notice').textContent = String(e);
@@ -170,11 +298,13 @@
             .map((s) => s.trim())
             .filter(Boolean),
         });
-        el('notice').textContent = 'Saved. Restart the Worker to apply configuration.';
+        el('notice').textContent = t('config.saved');
       } catch (e) {
         el('notice').textContent = String(e);
       }
     };
+
+    applyLang();
     refresh();
     setInterval(refresh, 2000);
   </script>
